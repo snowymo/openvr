@@ -1,3 +1,6 @@
+// zhenyi
+//#include <openvr_driver.h>
+#include <iostream>
 //========= Copyright Valve Corporation ============//
 
 #include <SDL.h>
@@ -75,6 +78,8 @@ public:
 	virtual ~CMainApplication();
 
 	bool BInit();
+	// zhenyi
+	
 	bool BInitGL();
 	bool BInitCompositor();
 
@@ -84,6 +89,11 @@ public:
 	bool HandleInput();
 	void ProcessVREvent( const vr::VREvent_t & event );
 	void RenderFrame();
+
+	// zhenyi
+	void GetRawIMU();
+	void printHmdVector3_t(std::string name, vr::HmdVector3d_t);
+	void printDouble(std::string name, double d);
 
 	bool SetupTexturemaps();
 
@@ -114,6 +124,12 @@ public:
 	CGLRenderModel *FindOrLoadRenderModel( const char *pchRenderModelName );
 
 private: 
+	// zhenyi
+	/* whenever you want to process IMU data */
+	vr::IOBufferHandle_t ulIMUStream;
+	vr::ImuSample_t imuSamples[10];
+	uint32_t unRead;
+
 	bool m_bDebugOpenGL;
 	bool m_bVerbose;
 	bool m_bPerf;
@@ -442,6 +458,14 @@ bool CMainApplication::BInit()
 	vr::EVRInitError eError = vr::VRInitError_None;
 	m_pHMD = vr::VR_Init( &eError, vr::VRApplication_Scene );
 
+	// zhenyi
+	std::cout << "test init\n";
+	
+	//vr::VR_Init(); // not necessary from an openvr driver
+	vr::VRIOBuffer()->Open("/devices/lighthouse/LHR-DBDD5377/imu", vr::EIOBufferMode::IOBufferMode_Read, sizeof(vr::ImuSample_t), 0, &ulIMUStream);
+
+	
+
 	if ( eError != vr::VRInitError_None )
 	{
 		m_pHMD = NULL;
@@ -594,6 +618,8 @@ bool CMainApplication::BInitGL()
 }
 
 
+
+
 //-----------------------------------------------------------------------------
 // Purpose: Initialize Compositor. Returns true if the compositor was
 //          successfully initialized, false otherwise.
@@ -617,6 +643,10 @@ bool CMainApplication::BInitCompositor()
 //-----------------------------------------------------------------------------
 void CMainApplication::Shutdown()
 {
+	// zhenyi
+	/* when you’re done */
+	vr::VRIOBuffer()->Close(ulIMUStream);
+
 	if( m_pHMD )
 	{
 		vr::VR_Shutdown();
@@ -813,7 +843,20 @@ void CMainApplication::RunMainLoop()
 	{
 		bQuit = HandleInput();
 
-		RenderFrame();
+		//RenderFrame();
+
+		// zhenyi
+		while (vr::VRIOBuffer()->Read(ulIMUStream, imuSamples, sizeof(imuSamples), &unRead) == vr::IOBuffer_Success && unRead > 0)
+		{
+			for (uint32_t i = 0; i < unRead / sizeof(vr::ImuSample_t); i++)
+			{
+				printDouble("timestamp", imuSamples[i].fSampleTime);
+				printHmdVector3_t("accel", imuSamples[i].vAccel);
+				printHmdVector3_t("gyro", imuSamples[i].vGyro);
+				// process up to 10 samples at a time, you don't need to drain the available
+				// samples if you don't want to
+			}
+		}
 	}
 
 	SDL_StopTextInput();
@@ -838,6 +881,44 @@ void CMainApplication::ProcessVREvent( const vr::VREvent_t & event )
 		}
 		break;
 	}
+}
+
+// zhenyi: Get IMU Raw data
+void CMainApplication::GetRawIMU() {
+	// retrieve the property container of the current HMD
+	//vr::PropertyContainerHandle_t ulContainer = vr::VRProperties()->TrackedDeviceToPropertyContainer(vr::k_unTrackedDeviceIndex_Hmd);
+
+	//vr::HmdVector3d_t vGyroBias, vGyroScale, vAccelBias, vAccelScale;
+
+	//// retrieve and save the factory calibration data
+	//vr::VRProperties()->GetProperty(ulContainer, vr::Prop_ImuFactoryGyroBias_Vector3, &vGyroBias, sizeof(vr::HmdVector3_t), nullptr);
+	//vr::VRProperties()->GetProperty(ulContainer, vr::Prop_ImuFactoryGyroScale_Vector3, &vGyroScale, sizeof(vr::HmdVector3_t), nullptr);
+	//vr::VRProperties()->GetProperty(ulContainer, vr::Prop_ImuFactoryAccelerometerBias_Vector3, &vAccelBias, sizeof(vr::HmdVector3_t), nullptr);
+	//vr::VRProperties()->GetProperty(ulContainer, vr::Prop_ImuFactoryAccelerometerScale_Vector3, &vAccelScale, sizeof(vr::HmdVector3_t), nullptr);
+
+	//printHmdVector3_t("gyrobias", vGyroBias);
+	//printHmdVector3_t("GyroScale", vGyroScale);
+	//printHmdVector3_t("AccelBias", vAccelBias);
+	//printHmdVector3_t("AccelScale", vAccelScale);
+
+	// calibrate 
+	//vr::ImuSample_t CalibrateSample(vr::ImuSample_t imuIn);
+}
+
+void CMainApplication::printHmdVector3_t(std::string name, vr::HmdVector3d_t v) {
+	std::string str;
+	str = name + ":(" + std::to_string(v.v[0]) + "," + std::to_string(v.v[1]) + "," + std::to_string(v.v[0]) + ")\n";
+	std::wstring stemp = std::wstring(str.begin(), str.end());
+	LPCWSTR sw = stemp.c_str();
+	OutputDebugString(sw);
+}
+
+void CMainApplication::printDouble(std::string name, double d) {
+	std::string str;
+	str = name + ":(" + std::to_string(d) + ")\n";
+	std::wstring stemp = std::wstring(str.begin(), str.end());
+	LPCWSTR sw = stemp.c_str();
+	OutputDebugString(sw);
 }
 
 
@@ -1905,6 +1986,33 @@ void CGLRenderModel::Draw()
 	glBindVertexArray( 0 );
 }
 
+void test() {
+	//LHR-DBDD5377
+	/* initialization */
+	std::cout << "test init\n";
+	vr::IOBufferHandle_t ulIMUStream;
+	//vr::VR_Init(); // not necessary from an openvr driver
+	vr::VRIOBuffer()->Open("/devices/lighthouse/LHR-DBDD5377/imu", vr::EIOBufferMode::IOBufferMode_Read, sizeof(vr::ImuSample_t), 0, &ulIMUStream);
+
+	/* whenever you want to process IMU data */
+	vr::ImuSample_t imuSamples[10];
+	uint32_t unRead;
+
+	while (vr::VRIOBuffer()->Read(ulIMUStream, imuSamples, sizeof(imuSamples), &unRead) == vr::IOBuffer_Success && unRead > 0)
+	{
+		for (uint32_t i = 0; i < unRead / sizeof(vr::ImuSample_t); i++)
+		{
+			
+			imuSamples[i].vAccel;
+			imuSamples[i].vGyro;
+			// process up to 10 samples at a time, you don't need to drain the available
+			// samples if you don't want to
+		}
+	}
+
+	/* when you’re done */
+	vr::VRIOBuffer()->Close(ulIMUStream);
+}
 
 //-----------------------------------------------------------------------------
 // Purpose:
@@ -1922,6 +2030,8 @@ int main(int argc, char *argv[])
 	pMainApplication->RunMainLoop();
 
 	pMainApplication->Shutdown();
+
+//	test();
 
 	return 0;
 }

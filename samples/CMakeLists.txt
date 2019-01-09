@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0.2)
+﻿cmake_minimum_required(VERSION 3.0.2)
 
 project(openvr_samples)
 
@@ -243,6 +243,7 @@ endif()
 
 add_subdirectory(driver_sample)
 add_subdirectory(hellovr_opengl)
+add_subdirectory(IMUTest)
 if(NOT (${CMAKE_SYSTEM_NAME} MATCHES "Darwin"))
   add_subdirectory(hellovr_vulkan)
 endif()
